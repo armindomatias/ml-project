@@ -114,9 +114,7 @@ def load_model(base_path: str) -> Any:
     else:
         raise FileNotFoundError(f"Neither {cbm_path} nor {pkl_path} found.")
 
-
-def plot_predictions_vs_actual(predictions_df: pd.DataFrame, actual_df: pd.DataFrame, 
-                              save_path: str = "inference_results.png") -> None:
+def plot_predictions_vs_actual(predictions_df: pd.DataFrame, actual_df: pd.DataFrame, save_path: str = "inference_results.png") -> None:
     """
     Plot comparison of predicted vs actual bike counts.
     Merges on datetime and shows RMSE in the title. X-axis is formatted for readability.
@@ -182,3 +180,157 @@ def calculate_prediction_metrics(predictions_df: pd.DataFrame, actual_df: pd.Dat
         'num_actual': len(actual_df),
         'num_matched': len(merged)
     }
+
+def make_prediction_figures(
+    df_prod: pd.DataFrame,
+    df_pred: pd.DataFrame,
+    parameters,
+    config,
+    lookback_hours,
+    shared_xrange
+):
+    # Handle missing or empty predictions
+    if df_pred is None or df_pred.empty:
+        max_time = df_prod['datetime'].max()
+        min_time = max_time - pd.Timedelta(hours=lookback_hours)
+        df_prod = df_prod[(df_prod['datetime'] >= min_time) & (df_prod['datetime'] <= max_time)]
+        fig1 = go.Figure()
+        fig2 = go.Figure()
+        fig1.add_trace(go.Scattergl(
+            x=df_prod['datetime'],
+            y=df_prod['cnt'],
+            name='True Bike Count',
+            mode='lines+markers',
+            line=dict(color='#F08080', width=2),
+            marker=dict(symbol='x', size=6)
+        ))
+        for param in parameters:
+            if param in df_prod.columns:
+                fig2.add_trace(go.Scattergl(
+                    x=df_prod['datetime'],
+                    y=df_prod[param],
+                    name=param,
+                    mode='lines'
+                ))
+        for fig in [fig1, fig2]:
+            fig.update_layout(
+                template='plotly_white',
+                margin=dict(l=40, r=40, t=40, b=20),
+                height=330,
+                showlegend=True,
+                xaxis_title="Time",
+                yaxis_title="Value",
+                legend=dict(
+                    orientation='h',
+                    yanchor='bottom',
+                    y=1.02,
+                    xanchor='center',
+                    x=0.5
+                ),
+                xaxis=dict(
+                    title_font=dict(color=config['ui']['axis_font_color']),
+                    tickfont=dict(color=config['ui']['axis_font_color'])
+                ),
+                yaxis=dict(
+                    title_font=dict(color=config['ui']['axis_font_color']),
+                    tickfont=dict(color=config['ui']['axis_font_color'])
+                ),
+                plot_bgcolor='#fff',
+                paper_bgcolor='#fff'
+            )
+        prod_max_time = df_prod['datetime'].max()
+        for fig in [fig1, fig2]:
+            fig.add_vline(
+                x=prod_max_time,
+                line_width=3,
+                line_dash="dash",
+                line_color="lightgrey"
+            )
+        pred_max_time = prod_max_time + pd.Timedelta(hours=2)
+        if shared_xrange and len(shared_xrange) == 2:
+            fig1.update_xaxes(range=shared_xrange)
+            fig2.update_xaxes(range=shared_xrange)
+        else:
+            fig1.update_xaxes(range=[min_time, pred_max_time])
+            fig2.update_xaxes(range=[min_time, pred_max_time])
+        return fig1, fig2
+
+    # If predictions exist, plot both
+    max_time = max(df_pred['datetime'].max(), df_prod['datetime'].max())
+    min_time = max_time - pd.Timedelta(hours=lookback_hours)
+    df_pred = df_pred[(df_pred['datetime'] >= min_time) & (df_pred['datetime'] <= max_time)]
+    df_prod = df_prod[(df_prod['datetime'] >= min_time) & (df_prod['datetime'] <= max_time)]
+    merged = pd.merge(
+        df_pred[['datetime', 'prediction']],
+        df_prod[['datetime', 'cnt']],
+        on='datetime',
+        how='outer'
+    )
+    fig1 = go.Figure()
+    fig2 = go.Figure()
+    fig1.add_trace(go.Scattergl(
+        x=merged['datetime'],
+        y=merged['cnt'],
+        name='True Bike Count',
+        mode='lines+markers',
+        line=dict(color='#F08080', width=2),
+        marker=dict(symbol='x', size=6)
+    ))
+    fig1.add_trace(go.Scattergl(
+        x=merged['datetime'],
+        y=merged['prediction'],
+        name='Predicted Bike Count',
+        mode='lines+markers',
+        line=dict(color='#1E8449', width=2),
+        marker=dict(symbol='circle', size=8)
+    ))
+    for param in parameters:
+        if param in df_prod.columns:
+            fig2.add_trace(go.Scattergl(
+                x=df_prod['datetime'],
+                y=df_prod[param],
+                name=param,
+                mode='lines'
+            ))
+    for fig in [fig1, fig2]:
+        fig.update_layout(
+            template='plotly_white',
+            margin=dict(l=40, r=40, t=40, b=20),
+            height=330,
+            showlegend=True,
+            xaxis_title="Time",
+            yaxis_title="Value",
+            legend=dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='center',
+                x=0.5
+            ),
+            xaxis=dict(
+                title_font=dict(color=config['ui']['axis_font_color']),
+                tickfont=dict(color=config['ui']['axis_font_color'])
+            ),
+            yaxis=dict(
+                title_font=dict(color=config['ui']['axis_font_color']),
+                tickfont=dict(color=config['ui']['axis_font_color'])
+            ),
+            plot_bgcolor='#fff',
+            paper_bgcolor='#fff'
+        )
+    prod_max_time = df_prod['datetime'].max()
+    for fig in [fig1, fig2]:
+        fig.add_vline(
+            x=prod_max_time,
+            line_width=3,
+            line_dash="dash",
+            line_color="lightgrey"
+        )
+    pred_max_time = df_pred['datetime'].max() + pd.Timedelta(hours=2)
+    if shared_xrange and len(shared_xrange) == 2:
+        fig1.update_xaxes(range=shared_xrange)
+        fig2.update_xaxes(range=shared_xrange)
+    else:
+        fig1.update_xaxes(range=[min_time, pred_max_time])
+        fig2.update_xaxes(range=[min_time, pred_max_time])
+    return fig1, fig2

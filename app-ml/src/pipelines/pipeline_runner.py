@@ -73,7 +73,7 @@ class PipelineRunner:
         )
 
         # Load existing production database ("db" from where my actual model is fed)
-        self.current_database_name = self.data_manager.load_data(path=self.prod_data_path)
+        self.current_database_data = self.data_manager.load_data(path=self.prod_data_path)
 
     def run_training(self) -> None:
         """
@@ -143,7 +143,7 @@ class PipelineRunner:
             )
             self.logger.info(f"Retrieved real-time data shape: {current_real_time_data.shape}")
 
-            # Step 2: Append new data to production database
+            # Step 2: Append new data to production database (to add lagged feats)
             self.logger.info("Appending new data to production database...")
             self.current_database_data = self.data_manager.append_data(
                 current_data=self.current_database_data,
@@ -151,7 +151,7 @@ class PipelineRunner:
             )
             self.logger.info(f"Updated database shape: {self.current_database_data.shape}")
 
-            # Step 3: Get the last N rows as the latest batch
+            # Step 3: Get the last N rows as the latest batch (get a batch to do preprocessing and feat_eng)
             batch_size = self.config.get("pipeline_runner").get("batch_size")
             self.logger.info(f"Getting last {batch_size} rows for batch processing...")
             df = self.data_manager.get_n_last_points(
